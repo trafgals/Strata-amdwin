@@ -96,7 +96,10 @@ def main() -> int:
     shutil.rmtree(stage, ignore_errors=True)
     (stage / "rocm" / "bin").mkdir(parents=True)
 
-    for p in PROGRAMS:
+    programs = [p for p in PROGRAMS if (a.build / p).is_file()]
+    if (a.build / "strata-dsv41.exe").is_file():
+        programs.append("strata-dsv41.exe")
+    for p in programs:
         shutil.copy2(a.build / p, stage / p)
     readers = [(src, src.name) for src in (a.vision_cpu, a.vision_hip) if src is not None]
     for src, name in readers:
@@ -104,7 +107,7 @@ def main() -> int:
 
     # the ROCm DLLs: the programs' imports, followed through the ROCm DLLs themselves
     rocm_dlls = {p.name.lower(): p for p in rbin.glob("*.dll")}
-    need, todo, crt = [], [stage / p for p in PROGRAMS] + [stage / n for _, n in readers] + [rbin / d for d in DYNAMIC], set()
+    need, todo, crt = [], [stage / p for p in programs] + [stage / n for _, n in readers] + [rbin / d for d in DYNAMIC], set()
     while todo:
         f = todo.pop()
         for name in imports(objdump, f):

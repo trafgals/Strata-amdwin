@@ -22,6 +22,7 @@ rem   STRATA_ROCM_KEEP      1 = use the ROCM_VENV as it is (no pip install, even
 rem   STRATA_VISION_HIP_ARCHS  the GPU reader's archs (default: STRATA_HIP_ARCHS; about 70 MB of the zip per arch)
 rem   STRATA_NO_VISION     1 = skip the two picture readers (strata-vision.exe for the CPU, strata-vision-hip.exe for the GPU)
 setlocal EnableDelayedExpansion
+set "PATH=C:\Users\dimit\AppData\Local\Python\pythoncore-3.14-64\Scripts;%PATH%"
 for %%I in ("%~dp0..\..") do set "SRC=%%~fI"
 if not defined STRATA_HIP_ARCHS set "STRATA_HIP_ARCHS=gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1030;gfx1031;gfx1151"
 if not defined STRATA_ROCM_VERSION set "STRATA_ROCM_VERSION=10.2.0a20260930"
@@ -31,6 +32,10 @@ if not defined BUILD_DIR set "BUILD_DIR=%SRC%\build-hip-win"
 if not defined DIST_DIR set "DIST_DIR=%SRC%\dist"
 set "TESTS=OFF"
 if /i "%~1"=="tests" set "TESTS=ON"
+set "DSV41=OFF"
+if /i "%~1"=="dsv41" set "DSV41=ON"
+if /i "%~2"=="dsv41" set "DSV41=ON"
+if defined STRATA_BUILD_DSV41 set "DSV41=ON"
 
 rem ---- 1. ROCm (TheRock wheels: the compiler, the HIP runtime, hipBLAS/hipBLASLt/rocBLAS, a device package per arch)
 set "PY="
@@ -71,14 +76,19 @@ set "GGML="
 if defined STRATA_GGML_DIR set "GGML=-DSTRATA_GGML_DIR=%STRATA_GGML_DIR:\=/%"
 if not exist "%BUILD_DIR%\build.ninja" (
   cmake -G Ninja -S "%SRC%" -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=Release ^
-    -DSTRATA_ENABLE_HIP=ON -DSTRATA_ENABLE_CUDA=OFF -DSTRATA_BUILD_TESTS=%TESTS% -DSTRATA_PREFILL_MMQ=ON ^
+    -DSTRATA_ENABLE_HIP=ON -DSTRATA_ENABLE_CUDA=OFF -DSTRATA_BUILD_TESTS=%TESTS% -DSTRATA_BUILD_DSV41=%DSV41% -DSTRATA_PREFILL_MMQ=ON ^
     -DSTRATA_NATIVE_EXPERTS=ON -DSTRATA_PORTABLE=ON "-DCMAKE_HIP_ARCHITECTURES=%STRATA_HIP_ARCHS%" ^
     "-DCMAKE_C_COMPILER=%ROCM_F%/lib/llvm/bin/clang.exe" "-DCMAKE_CXX_COMPILER=%ROCM_F%/lib/llvm/bin/clang++.exe" ^
     "-DCMAKE_HIP_COMPILER=%ROCM_F%/lib/llvm/bin/clang++.exe" "-DCMAKE_HIP_COMPILER_ROCM_ROOT=%ROCM_F%" ^
     "-DCMAKE_PREFIX_PATH=%ROCM_F%" "-DCMAKE_HIP_FLAGS=--rocm-path=%ROCM_F% --rocm-device-lib-path=%BITCODE%" ^
     %GGML% || exit /b 1
 )
-if "%TESTS%"=="ON" (
+if "%DSV41%"=="ON" (
+  cmake --build "%BUILD_DIR%" --target strata-dsv41 || exit /b 1
+  echo.
+  echo Built strata-dsv41 in "%BUILD_DIR%"
+  exit /b 0
+) else if "%TESTS%"=="ON" (
   cmake --build "%BUILD_DIR%" || exit /b 1
 ) else (
   cmake --build "%BUILD_DIR%" --target strata strata-device || exit /b 1
